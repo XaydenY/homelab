@@ -1,8 +1,11 @@
-const exspress = require('express');
-const app = exspress();
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3001;
+
 app.get('/', (req, res) => {
-    res.send('Home Lab Backend Running!!!');
+    res.send('Homelab backend is running!');
 });
-app.listen(3001, () => {
-    console.log('Backend server is running on port 3001');
+
+app.listen(PORT, () => {
+    console.log(`Backend server running on port ${PORT}`);
 });
