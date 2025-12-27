@@ -217,3 +217,11 @@ header{padding:0.9rem 1.5rem;border-bottom:1px solid rgba(15,23,42,0.04)}
   z-index: 9999;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
+.sidebar-clicked {
+  background-color: rgba(255,255,255,0.06) !important;
+  color: var(--palette-4) !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  padding: 0.25rem 0.6rem !important;
+  border-left: 3px solid var(--palette-2) !important;
+}

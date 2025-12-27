@@ -1,5 +1,4 @@
 const si = require('systeminformation');
-
 async function getSystemInfo() {
   const [cpu, mem, disk, load] = await Promise.all([
     si.cpu(),
@@ -21,5 +20,4 @@ async function getSystemInfo() {
     cpuCores: Array.isArray(load.cpus) ? load.cpus.map(core => core.load.toFixed(1)) : [] // per-core percent
   };
 }
-
 module.exports = { getSystemInfo };

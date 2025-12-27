@@ -166,20 +166,41 @@ function showSection(sectionId) {
     }
 }
 // Hash-based navigation handler
+function setActiveSidebar(finalHash) {
+  // clear all
+  $('#dashboard-selector-button, #file-search-selector-button, #settings-selector-button').removeClass('sidebar-clicked');
+  // try to find an anchor with matching href
+  const $match = $('a[href="#' + finalHash + '"]');
+  if ($match.length) {
+    $match.addClass('sidebar-clicked');
+    return;
+  }
+  // fallback mapping
+  if (finalHash === 'Dashboard-section') $('#dashboard-selector-button').addClass('sidebar-clicked');
+  if (finalHash === 'File-Search-section') $('#file-search-selector-button').addClass('sidebar-clicked');
+  if (finalHash === 'Settings-section') $('#settings-selector-button').addClass('sidebar-clicked');
+}
+
 function handleHashChange() {
   let hash = window.location.hash ? window.location.hash.substring(1) : '';
   if (!hash) hash = 'Dashboard-section';
-  // support friendly hashes as well
-  if (hash === 'dashboard') hash = 'Dashboard-section';
-  if (hash === 'files' || hash === 'file-search' || hash === 'file_search') hash = 'File-Search-section';
-  if (hash === 'settings') hash = 'Settings-section';
-  // call existing showSection to toggle visibility
+  // support friendly shortcuts
+  const lower = hash.toLowerCase();
+  if (lower === 'dashboard') hash = 'Dashboard-section';
+  if (['files','file-search','file_search'].includes(lower)) hash = 'File-Search-section';
+  if (lower === 'settings') hash = 'Settings-section';
+  // show the section and mark active link
   showSection(hash);
+  setActiveSidebar(hash);
 }
 
 window.addEventListener('hashchange', handleHashChange);
 function settingsloader(){
-    $('#refresh-rate').val(refreshRate);
+  $('#refresh-rate').val(refreshRate);
+  // load stored file API key if present
+  const fk = localStorage.getItem('fileApiKey') || '';
+  const $fk = $('#file-api-key');
+  if ($fk.length) $fk.val(fk);
 }
 function saveSettings(){ 
     const val = $('#refresh-rate').val();
@@ -191,6 +212,9 @@ function saveSettings(){
     refreshRate = newRate;
     // restart auto-refresh with new rate
     try { startAutoRefresh(); } catch (e) { /* ignore if startAutoRefresh not available */ }
+  // save optional file API key
+  const fk = ($('#file-api-key').length) ? $('#file-api-key').val() : '';
+  if (fk !== undefined) localStorage.setItem('fileApiKey', fk || '');
 }
 function notify(message, duration = 3000, type = 'info') {
     const $toast = $('#toast');
@@ -204,6 +228,17 @@ function notify(message, duration = 3000, type = 'info') {
     setTimeout(() => {
       $toast.fadeOut(400);
     }, duration);
+}
+function loadDirectory(pathQuery='') {
+    $.get('/api/files?path=' + encodeURIComponent(pathQuery), function(data) {
+        let html = '<ul class="list-disc list-inside">';
+        data.forEach(function(entry) {
+            const icon = entry.isDirectory ? 'folder' : 'file';
+            html += `<li>${iconImg(icon, 'inline-block w-4 h-4 mr-2 align-middle')} ${entry.name}</li>`;
+        });
+        html += '</ul>';
+        $('#file-search-results').html(html);
+    });
 }
 $(document).ready(function() {
   settingsloader();
@@ -221,5 +256,88 @@ $(document).ready(function() {
     const secs = (Number.isFinite(raw) && raw > 0) ? raw : (getRefreshRate() / 1000);
     setRefreshRate(secs * 1000);
     $('#refresh-rate').val(getRefreshRate() / 1000);
+    // also persist file API key from settings
+    const fk = ($('#file-api-key').length) ? $('#file-api-key').val() : '';
+    if (fk !== undefined) localStorage.setItem('fileApiKey', fk || '');
   };
+  // File search bindings
+  $('#file-search-btn').on('click', function() {
+    const q = $('#file-search-input').val() || '';
+    doFileSearch(q);
+  });
+  $('#file-search-clear').on('click', function() {
+    $('#file-search-input').val('');
+    $('#file-search-results').empty();
+  });
+  $('#file-search-input').on('keypress', function(e) {
+    if (e.which === 13) {
+      $('#file-search-btn').click();
+    }
+  });
 });
+
+function doFileSearch(q) {
+  const $out = $('#file-search-results');
+  $out.html('<div class="text-muted">Searching...</div>');
+  $.get('/api/files', { q: q }, function(res) {
+    const items = (res && res.results) ? res.results : [];
+    if (!items.length) {
+      $out.html('<div class="text-muted">No files found.</div>');
+      return;
+    }
+    const list = $('<ul/>').addClass('divide-y');
+    items.slice(0,200).forEach(function(it) {
+      const li = $('<li/>').addClass('py-2 flex items-center justify-between');
+      const left = $('<div/>').addClass('flex items-center gap-3');
+      left.append($('<img/>').attr('src','src/svg/upload.svg').addClass('w-5 h-5 invert'));
+      left.append($('<div/>').text(it.path).addClass('text-sm'));
+      const right = $('<div/>').addClass('flex items-center gap-2');
+      // Preview button — will fetch and open in new tab (supports API key via localStorage)
+      const preview = $('<button/>').addClass('btn btn-muted').text('Preview').on('click', function(e){
+        e.preventDefault();
+        fetchAndOpen(it.path, false);
+      });
+      const dl = $('<button/>').addClass('btn').text('Download').on('click', function(e){
+        e.preventDefault();
+        fetchAndOpen(it.path, true);
+      });
+      right.append(preview).append(dl);
+      li.append(left).append(right);
+      list.append(li);
+    });
+    $out.empty().append(list);
+  }).fail(function(){
+    $out.html('<div class="text-danger">Search failed</div>');
+  });
+}
+
+async function fetchAndOpen(relPath, download) {
+  const apiKey = localStorage.getItem('fileApiKey') || '';
+  const url = '/api/files/raw?path=' + encodeURIComponent(relPath);
+  try {
+    const headers = {};
+    if (apiKey) headers['x-api-key'] = apiKey;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=>'');
+      notify('Failed to fetch file: ' + resp.status, 3000, 'error');
+      return;
+    }
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    if (download) {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = relPath.split('/').pop() || 'file';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } else {
+      window.open(blobUrl, '_blank');
+      setTimeout(()=>URL.revokeObjectURL(blobUrl), 30000);
+    }
+  } catch (e) {
+    notify('Error fetching file', 2500, 'error');
+  }
+}

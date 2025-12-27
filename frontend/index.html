@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Homelab Dashboard</title>
-  <link rel="stylesheet" href="style.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-page min-h-screen flex">
   <!-- Sidebar -->
@@ -17,9 +17,9 @@
     </div>
     <nav class="flex-1">
       <ul class="space-y-4">
-        <li><a href="#Dashboard-section" class="block py-2 px-4 rounded bg-primary-strong font-semibold flex items-center"> <img src="src/svg/xray-view.svg" class="w-5 h-5 mr-2 invert" alt="Dashboard"> Dashboard</a></li>
-        <li><a href="#File-Search-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/send-diagonal.svg" class="w-5 h-5 mr-2 invert" alt="Files"> File Search</a></li>
-        <li><a href="#Settings-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/refresh-circle.svg" class="w-5 h-5 mr-2 invert" alt="Settings"> Settings</a></li>
+        <li><a id="dashboard-selector-button" href="#Dashboard-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center"> <img src="src/svg/xray-view.svg" class="w-5 h-5 mr-2 invert" alt="Dashboard"> Dashboard</a></li>
+        <li><a id="file-search-selector-button" href="#File-Search-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/send-diagonal.svg" class="w-5 h-5 mr-2 invert" alt="Files"> File Search</a></li>
+        <li><a id="settings-selector-button" href="#Settings-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/refresh-circle.svg" class="w-5 h-5 mr-2 invert" alt="Settings"> Settings</a></li>
       </ul>
     </nav>
     <div class="mt-10 text-xs text-muted">&copy; WolfLab</div>
@@ -63,7 +63,15 @@
       </div>
     </section>
     <section id="File-Search-section">
-        <h1>file search section</h1>
+        <div class="p-6 w-full max-w-full">
+          <h2 class="text-lg font-semibold text-primary mb-3">File Search</h2>
+          <div class="mb-4 flex items-center gap-3">
+            <input id="file-search-input" placeholder="Search files (e.g. wolf)" class="input inline-block w-72" />
+            <button id="file-search-btn" class="btn">Search</button>
+            <button id="file-search-clear" class="btn btn-muted">Clear</button>
+          </div>
+          <div id="file-search-results" class="bg-white rounded-xl shadow-md p-4 max-w-full"></div>
+        </div>
     </section>
     <section id="Settings-section">
     <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full text-lg">
@@ -71,6 +79,10 @@
             <div class="text-lg text-muted text-center">
                 <label for="refresh-rate" class="mr-2">Server resources refresh rate (seconds):</label><input id="refresh-rate" class="input inline-block w-16" >
                 <br>
+                <div class="mt-4">
+                  <label for="file-api-key" class="mr-2">File API Key (optional):</label>
+                  <input id="file-api-key" class="input inline-block w-48" placeholder="paste API key for file endpoints" />
+                </div>
                 <button id="save-settings" class="btn btn-brand mt-4">Save Settings</button>
       </div>
     </section>
