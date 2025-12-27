@@ -66,9 +66,17 @@
         <div class="p-6 w-full max-w-full">
           <h2 class="text-lg font-semibold text-primary mb-3">File Search</h2>
           <div class="mb-4 flex items-center gap-3">
-            <input id="file-search-input" placeholder="Search files (e.g. wolf)" class="input inline-block w-72" />
-            <button id="file-search-btn" class="btn">Search</button>
-            <button id="file-search-clear" class="btn btn-muted">Clear</button>
+              <input id="file-search-input" placeholder="Search files (e.g. wolf)" class="input inline-block w-72" />
+              <select id="file-scope" class="input inline-block w-40">
+                <option value="storage">Scope: Storage</option>
+                <option value="full">Scope: Full drive (requires System Pass)</option>
+              </select>
+              <button id="file-browse-btn" class="btn">Browse / Search</button>
+              <button id="file-search-clear" class="btn ">Clear</button>
+          </div>
+          <div class="mb-3 flex items-center gap-3">
+            <button id="file-up-btn" class="btn btn-muted" style="display:none">Up</button>
+            <div id="file-breadcrumb" class="text-sm text-muted" style="display:none"></div>
           </div>
           <div id="file-search-results" class="bg-white rounded-xl shadow-md p-4 max-w-full"></div>
         </div>
@@ -80,8 +88,9 @@
                 <label for="refresh-rate" class="mr-2">Server resources refresh rate (seconds):</label><input id="refresh-rate" class="input inline-block w-16" >
                 <br>
                 <div class="mt-4">
-                  <label for="file-api-key" class="mr-2">File API Key (optional):</label>
-                  <input id="file-api-key" class="input inline-block w-48" placeholder="paste API key for file endpoints" />
+                  <label for="system-pass" class="mr-2">System Pass (optional):</label>
+                  <input id="system-pass" class="input inline-block w-48" placeholder="paste system pass for file endpoints" />
+                  <div id="system-pass-msg" class="text-sm text-red-600 mt-2" style="display:none"></div>
                 </div>
                 <button id="save-settings" class="btn btn-brand mt-4">Save Settings</button>
       </div>

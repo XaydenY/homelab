@@ -2,6 +2,7 @@ let cpuChart;
 let cpuCoreCount = 0;
 let refreshRate = localStorage.getItem('refreshRate') || 2;
 let refreshIntervalId = null;
+let currentDir = '';
 
 function startAutoRefresh() {
   if (refreshIntervalId) clearInterval(refreshIntervalId);
@@ -198,9 +199,47 @@ window.addEventListener('hashchange', handleHashChange);
 function settingsloader(){
   $('#refresh-rate').val(refreshRate);
   // load stored file API key if present
-  const fk = localStorage.getItem('fileApiKey') || '';
-  const $fk = $('#file-api-key');
+  const fk = localStorage.getItem('systemPass') || '';
+  const $fk = $('#system-pass');
   if ($fk.length) $fk.val(fk);
+}
+// Validate system pass by calling server auth-check
+async function validateSystemPass(pass) {
+  try {
+    const resp = await fetch('/api/auth/check?system_pass=' + encodeURIComponent(pass));
+    if (!resp.ok) return false;
+    const j = await resp.json();
+    return !!j.authenticated;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function saveSettingsAndValidate() {
+  // Save refresh rate first
+  saveSettings();
+  const pass = ($('#system-pass').length) ? $('#system-pass').val() : '';
+  const $msg = $('#system-pass-msg');
+  $msg.hide().text('');
+  if (pass && pass.length > 0) {
+    const ok = await validateSystemPass(pass);
+    if (!ok) {
+      // invalid - do not persist
+      localStorage.setItem('systemPass', '');
+      $msg.text('Incorrect system pass — full-drive access denied').show();
+      notify('System pass incorrect', 3000, 'error');
+      return;
+    }
+    // valid
+    localStorage.setItem('systemPass', pass);
+    $msg.css('color','green').text('System pass saved — full-drive access enabled').show();
+    notify('Settings saved and system pass validated', 2000, 'info');
+  } else {
+    // empty pass - clear
+    localStorage.setItem('systemPass', '');
+    $msg.hide();
+    notify('Settings saved', 1200, 'info');
+  }
 }
 function saveSettings(){ 
     const val = $('#refresh-rate').val();
@@ -213,8 +252,8 @@ function saveSettings(){
     // restart auto-refresh with new rate
     try { startAutoRefresh(); } catch (e) { /* ignore if startAutoRefresh not available */ }
   // save optional file API key
-  const fk = ($('#file-api-key').length) ? $('#file-api-key').val() : '';
-  if (fk !== undefined) localStorage.setItem('fileApiKey', fk || '');
+  const fk = ($('#system-pass').length) ? $('#system-pass').val() : '';
+  if (fk !== undefined) localStorage.setItem('systemPass', fk || '');
 }
 function notify(message, duration = 3000, type = 'info') {
     const $toast = $('#toast');
@@ -229,18 +268,90 @@ function notify(message, duration = 3000, type = 'info') {
       $toast.fadeOut(400);
     }, duration);
 }
-function loadDirectory(pathQuery='') {
-    $.get('/api/files?path=' + encodeURIComponent(pathQuery), function(data) {
-        let html = '<ul class="list-disc list-inside">';
-        data.forEach(function(entry) {
-            const icon = entry.isDirectory ? 'folder' : 'file';
-            html += `<li>${iconImg(icon, 'inline-block w-4 h-4 mr-2 align-middle')} ${entry.name}</li>`;
+async function loadDirectory(pathQuery='') {
+  const scope = $('#file-scope').val();
+  let systemPass = '';
+  if (scope === 'full') {
+    systemPass = localStorage.getItem('systemPass') || '';
+    if (!systemPass) { notify('System Pass required for full-drive browsing',3000,'error'); return; }
+    const ok = await validateSystemPass(systemPass);
+    if (!ok) { notify('Invalid System Pass',3000,'error'); return; }
+  }
+  $.get('/api/files/list', { dir: pathQuery, system_pass: systemPass }, function(data) {
+    const items = data.items || [];
+    // show breadcrumb
+    const $crumb = $('#file-breadcrumb');
+    const current = data.dir || '';
+    currentDir = current;
+    renderBreadcrumb(currentDir);
+    if (!items.length) {
+      $('#file-search-results').html('<div class="text-muted">Empty folder</div>');
+      return;
+    }
+    const list = $('<ul/>').addClass('divide-y');
+    items.forEach(function(it) {
+      const li = $('<li/>').addClass('py-2 flex items-center justify-between');
+      const left = $('<div/>').addClass('flex items-center gap-3');
+      const iconName = it.isDirectory ? 'upload' : 'file';
+      left.append($('<span/>').html(iconImg(iconName,'w-5 h-5 invert')));
+      const nameEl = $('<span/>').addClass('text-sm').text(it.name);
+      if (it.isDirectory) {
+        nameEl.addClass('cursor-pointer text-primary');
+        nameEl.on('click', function() {
+          const next = (current ? current + '/' : '') + it.name;
+          renderDirectory(next);
         });
-        html += '</ul>';
-        $('#file-search-results').html(html);
+      }
+      left.append(nameEl);
+      const right = $('<div/>');
+      if (!it.isDirectory) {
+        const preview = $('<button/>').addClass('btn ').text('Preview').on('click', function(e){ e.preventDefault(); fetchAndOpen((current?current+'/':'')+it.name,false); });
+        const dl = $('<button/>').addClass('btn').text('Download').on('click', function(e){ e.preventDefault(); fetchAndOpen((current?current+'/':'')+it.name,true); });
+        right.append(preview).append(dl);
+      }
+      li.append(left).append(right);
+      list.append(li);
     });
+    $('#file-search-results').empty().append(list);
+  }).fail(function(){
+    $('#file-search-results').html('<div class="text-danger">Failed to list directory</div>');
+  });
+}
+
+function renderDirectory(dir) { loadDirectory(dir); }
+
+function renderBreadcrumb(dir) {
+  const $crumb = $('#file-breadcrumb');
+  const $up = $('#file-up-btn');
+  $crumb.empty();
+  if (!dir) {
+    $crumb.hide();
+    $up.hide();
+    return;
+  }
+  $crumb.show();
+  $up.show();
+  const parts = dir.split('/');
+  parts.forEach(function(p, idx) {
+    const seg = $('<span/>').addClass('breadcrumb-seg cursor-pointer text-primary').text(p);
+    seg.on('click', function() {
+      const target = parts.slice(0, idx + 1).join('/');
+      renderDirectory(target);
+    });
+    $crumb.append(seg);
+    if (idx < parts.length - 1) $crumb.append($('<span/>').text(' / ').addClass('text-muted'));
+  });
+}
+
+function goUpDirectory() {
+  if (!currentDir) return;
+  const parts = currentDir.split('/');
+  parts.pop();
+  const parent = parts.join('/');
+  renderDirectory(parent);
 }
 $(document).ready(function() {
+  doFileSearch(' ')
   settingsloader();
   initCpuChart(1); //1 core for the start 
   loadSystemInfo();
@@ -256,30 +367,66 @@ $(document).ready(function() {
     const secs = (Number.isFinite(raw) && raw > 0) ? raw : (getRefreshRate() / 1000);
     setRefreshRate(secs * 1000);
     $('#refresh-rate').val(getRefreshRate() / 1000);
-    // also persist file API key from settings
-    const fk = ($('#file-api-key').length) ? $('#file-api-key').val() : '';
-    if (fk !== undefined) localStorage.setItem('fileApiKey', fk || '');
+    // also persist system pass from settings
+    const fk = ($('#system-pass').length) ? $('#system-pass').val() : '';
+    if (fk !== undefined) localStorage.setItem('systemPass', fk || '');
   };
-  // File search bindings
-  $('#file-search-btn').on('click', function() {
-    const q = $('#file-search-input').val() || '';
-    doFileSearch(q);
+  // File search / browse bindings
+  $('#file-browse-btn').on('click', async function(){
+    const q = ($('#file-search-input').val() || '').trim();
+    const scope = $('#file-scope').val();
+    if (q) {
+      await doFileSearch(q);
+      return;
+    }
+    // browse (empty query)
+    if (scope === 'full') {
+      const pass = localStorage.getItem('systemPass') || '';
+      if (!pass) { notify('Enter System Pass in Settings to browse full drive', 3000, 'error'); return; }
+      const ok = await validateSystemPass(pass);
+      if (!ok) { notify('Invalid System Pass', 3000, 'error'); return; }
+    }
+    renderDirectory('');
   });
+  // Up button
+  $('#file-up-btn').on('click', function(){ goUpDirectory(); });
+  // Scope selector - ensure full drive requires valid pass
+  $('#file-scope').on('change', async function() {
+    const val = $(this).val();
+    if (val === 'full') {
+      const pass = localStorage.getItem('systemPass') || '';
+      const ok = pass ? await validateSystemPass(pass) : false;
+      if (!ok) {
+        notify('Full-drive access requires a valid System Pass', 3000, 'error');
+        $(this).val('storage');
+      }
+    }
+  });
+  // Save settings button uses validated save
+  $('#save-settings').on('click', function() { saveSettingsAndValidate(); });
   $('#file-search-clear').on('click', function() {
     $('#file-search-input').val('');
     $('#file-search-results').empty();
   });
   $('#file-search-input').on('keypress', function(e) {
     if (e.which === 13) {
-      $('#file-search-btn').click();
+      $('#file-browse-btn').click();
     }
   });
 });
 
-function doFileSearch(q) {
+async function doFileSearch(q) {
   const $out = $('#file-search-results');
   $out.html('<div class="text-muted">Searching...</div>');
-  $.get('/api/files', { q: q }, function(res) {
+  const scope = $('#file-scope').val();
+  let systemPass = '';
+  if (scope === 'full') {
+    systemPass = localStorage.getItem('systemPass') || '';
+    if (!systemPass) { notify('System Pass required for full-drive search',3000,'error'); $out.html(''); return; }
+    const ok = await validateSystemPass(systemPass);
+    if (!ok) { notify('Invalid System Pass',3000,'error'); $out.html(''); return; }
+  }
+  $.get('/api/files', { q: q, system_pass: systemPass }, function(res) {
     const items = (res && res.results) ? res.results : [];
     if (!items.length) {
       $out.html('<div class="text-muted">No files found.</div>');
@@ -289,11 +436,11 @@ function doFileSearch(q) {
     items.slice(0,200).forEach(function(it) {
       const li = $('<li/>').addClass('py-2 flex items-center justify-between');
       const left = $('<div/>').addClass('flex items-center gap-3');
-      left.append($('<img/>').attr('src','src/svg/upload.svg').addClass('w-5 h-5 invert'));
+      left.append($('<img/>').attr('src','src/svg/file.svg').addClass('w-5 h-5 invert'));
       left.append($('<div/>').text(it.path).addClass('text-sm'));
       const right = $('<div/>').addClass('flex items-center gap-2');
       // Preview button — will fetch and open in new tab (supports API key via localStorage)
-      const preview = $('<button/>').addClass('btn btn-muted').text('Preview').on('click', function(e){
+      const preview = $('<button/>').addClass('btn ').text('Preview').on('click', function(e){
         e.preventDefault();
         fetchAndOpen(it.path, false);
       });
@@ -312,31 +459,47 @@ function doFileSearch(q) {
 }
 
 async function fetchAndOpen(relPath, download) {
-  const apiKey = localStorage.getItem('fileApiKey') || '';
-  const url = '/api/files/raw?path=' + encodeURIComponent(relPath);
+  const scope = $('#file-scope').val();
+  const apiKey = (scope === 'full') ? (localStorage.getItem('systemPass') || '') : '';
+  const baseUrl = '/files/storage/' + encodeURIComponent(relPath);
   try {
-    const headers = {};
-    if (apiKey) headers['x-api-key'] = apiKey;
-    const resp = await fetch(url, { headers });
+    // If an API key exists, use query param so the browser can navigate directly
+    if (apiKey) {
+      const urlWithKey = baseUrl + '?system_pass=' + encodeURIComponent(apiKey);
+      if (download) {
+        const a = document.createElement('a');
+        a.href = urlWithKey;
+        a.download = relPath.split('/').pop() || 'file';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        window.open(urlWithKey, '_blank');
+      }
+      return;
+    }
+
+    // No API key: navigate directly to the raw URL and let browser handle preview/download
+    if (!download) {
+      window.open(baseUrl, '_blank');
+      return;
+    }
+
+    // Download fallback: fetch blob and trigger download
+    const resp = await fetch(baseUrl);
     if (!resp.ok) {
-      const txt = await resp.text().catch(()=>'');
       notify('Failed to fetch file: ' + resp.status, 3000, 'error');
       return;
     }
     const blob = await resp.blob();
     const blobUrl = URL.createObjectURL(blob);
-    if (download) {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = relPath.split('/').pop() || 'file';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(blobUrl);
-    } else {
-      window.open(blobUrl, '_blank');
-      setTimeout(()=>URL.revokeObjectURL(blobUrl), 30000);
-    }
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = relPath.split('/').pop() || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(blobUrl), 30000);
   } catch (e) {
     notify('Error fetching file', 2500, 'error');
   }

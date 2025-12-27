@@ -1,0 +1,1 @@
+store documents in the /storage folder

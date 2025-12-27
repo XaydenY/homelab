@@ -4,22 +4,22 @@ const dotenv = require('dotenv');
 const path = require('path');
 const { getSystemInfo } = require('./services/system');
 const fs = require('fs').promises;
+const config = require('./config');
+const { SYSTEM_PASS, ALLOW_FULL_SYSTEM_ACCESS, STORAGE_DIR } = config;
 
 dotenv.config();
 const app = express();
 app.use(cors());
 
-// Simple API key protection for file endpoints (optional)
-const FILE_API_KEY = process.env.FILE_API_KEY || null;
-function checkApiKey(req, res, next) {
-  if (!FILE_API_KEY) return next();
-  const key = req.header('x-api-key') || req.query.api_key || req.get('Authorization');
-  if (!key) return res.status(401).json({ error: 'Missing API key' });
-  // allow 'Bearer <key>' or raw
+// System pass handling. If a request supplies the correct pass, `req.systemAuth` will be true
+// and routes will grant full-drive access. The canonical values are read from `backend/config.js`.
+function attachSystemAuth(req, res, next) {
+  const key = req.header('x-system-pass') || req.query.system_pass || req.get('Authorization');
   const raw = (key || '').replace(/^Bearer\s+/i, '').trim();
-  if (raw !== FILE_API_KEY) return res.status(403).json({ error: 'Invalid API key' });
+  req.systemAuth = raw && (raw === SYSTEM_PASS);
   next();
 }
+app.use(attachSystemAuth);
 
 app.get('/api/system', async (req, res) => {
   try {
@@ -53,7 +53,8 @@ async function findFiles(dir, q, baseDir, results = [], limit = 200) {
 
 app.get('/api/files', async (req, res) => {
   const q = (req.query.q || '').trim();
-  const baseDir = path.join(__dirname, '../frontend/src');
+  const allowFull = req.systemAuth || ALLOW_FULL_SYSTEM_ACCESS;
+  const baseDir = allowFull ? path.parse(process.cwd()).root : STORAGE_DIR;
   try {
     const results = await findFiles(baseDir, q, baseDir, [], 500);
     res.json({ results });
@@ -62,36 +63,58 @@ app.get('/api/files', async (req, res) => {
   }
 });
 
-// Directory listing with pagination and optional path parameter
-app.get('/api/files/list', checkApiKey, async (req, res) => {
-  const baseDir = path.join(__dirname, '../frontend/src');
+// Directory listing endpoint (non-recursive) for folder browsing
+app.get('/api/files/list', async (req, res) => {
   const dir = String(req.query.dir || '').replace(/\\/g, '/');
-  const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const perPage = Math.min(200, Math.max(5, parseInt(req.query.per_page || '50', 10)));
+  const allowFull = req.systemAuth || ALLOW_FULL_SYSTEM_ACCESS;
+  const baseDir = allowFull ? path.parse(process.cwd()).root : STORAGE_DIR;
+  const target = path.normalize(path.join(baseDir, dir));
+  if (!target.startsWith(baseDir)) return res.status(400).json({ error: 'Invalid path' });
   try {
-    const safe = path.normalize(path.join(baseDir, dir));
-    if (!safe.startsWith(baseDir)) return res.status(400).json({ error: 'Invalid directory' });
-    const entries = await fs.readdir(safe, { withFileTypes: true });
-    const mapped = entries.map(e => ({ name: e.name, isDirectory: e.isDirectory() }));
-    const start = (page - 1) * perPage;
-    const pageItems = mapped.slice(start, start + perPage);
-    res.json({ dir: path.relative(baseDir, safe).replace(/\\/g, '/'), page, perPage, total: mapped.length, items: pageItems });
+    const entries = await fs.readdir(target, { withFileTypes: true });
+    const items = entries.map(e => ({ name: e.name, isDirectory: e.isDirectory() }));
+    res.json({ dir: path.relative(baseDir, target).replace(/\\/g,'/') || '', items, total: items.length });
   } catch (e) {
     res.status(500).json({ error: 'Failed to list directory' });
   }
 });
 
-// Raw file download/preview (restricted)
-app.get('/api/files/raw', checkApiKey, async (req, res) => {
-  const baseDir = path.join(__dirname, '../frontend/src');
+// Simple auth-check endpoint: returns whether the provided system_pass is valid
+app.get('/api/auth/check', (req, res) => {
+  // req.systemAuth is set by middleware attachSystemAuth
+  res.json({ authenticated: !!req.systemAuth });
+});
+
+// Serve a raw file from storage with path normalization
+app.get('/api/files/raw', async (req, res) => {
   const p = String(req.query.path || '');
   if (!p) return res.status(400).json({ error: 'Missing path' });
+  const allowFull = req.systemAuth || ALLOW_FULL_SYSTEM_ACCESS;
+  const baseDir = allowFull ? path.parse(process.cwd()).root : STORAGE_DIR;
   const normalized = path.normalize(path.join(baseDir, p));
   if (!normalized.startsWith(baseDir)) return res.status(400).json({ error: 'Invalid path' });
   try {
     return res.sendFile(normalized);
   } catch (e) {
     return res.status(500).json({ error: 'Failed to read file' });
+  }
+});
+
+// Friendly URL for serving storage files: /files/storage/<encoded path>
+app.get('/files/storage/*', async (req, res) => {
+  const raw = req.params[0] || '';
+  if (!raw) return res.status(400).send('Missing file path');
+  // decode URI component segments
+  let p;
+  try { p = decodeURIComponent(raw); } catch (e) { p = raw; }
+  const allowFull = req.systemAuth || ALLOW_FULL_SYSTEM_ACCESS;
+  const baseDir = allowFull ? path.parse(process.cwd()).root : STORAGE_DIR;
+  const normalized = path.normalize(path.join(baseDir, p));
+  if (!normalized.startsWith(baseDir)) return res.status(400).send('Invalid path');
+  try {
+    return res.sendFile(normalized);
+  } catch (e) {
+    return res.status(500).send('Failed to read file');
   }
 });
 
