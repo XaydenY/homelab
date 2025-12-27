@@ -9,20 +9,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex">
+<body class="bg-page min-h-screen flex">
   <!-- Sidebar -->
-  <aside class="w-64 bg-blue-900 text-white flex flex-col min-h-screen p-6">
+  <aside class="w-56 bg-primary text-white flex flex-col min-h-screen p-6">
     <div class="mb-10">
-      <span class="text-2xl font-extrabold tracking-tight">Homelab Admin</span>
+      <span class="text-2xl font-extrabold tracking-tight">Wolflab
     </div>
     <nav class="flex-1">
       <ul class="space-y-4">
-        <li><a href="#" class="block py-2 px-4 rounded bg-blue-800 font-semibold flex items-center" onclick="showSection('Dashboard-section')"> <img src="src/svg/xray-view.svg" class="w-5 h-5 mr-2 invert" alt="Dashboard"> Dashboard</a></li>
-        <li><a href="#" class="block py-2 px-4 rounded hover:bg-blue-800 flex items-center" onclick="showSection('File-Search-section')"> <img src="src/svg/send-diagonal.svg" class="w-5 h-5 mr-2 invert" alt="Files"> File Search</a></li>
-        <li><a href="#" class="block py-2 px-4 rounded hover:bg-blue-800 flex items-center" onclick="showSection('Settings-section')"> <img src="src/svg/refresh-circle.svg" class="w-5 h-5 mr-2 invert" alt="Settings"> Settings</a></li>
+        <li><a href="#Dashboard-section" class="block py-2 px-4 rounded bg-primary-strong font-semibold flex items-center"> <img src="src/svg/xray-view.svg" class="w-5 h-5 mr-2 invert" alt="Dashboard"> Dashboard</a></li>
+        <li><a href="#File-Search-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/send-diagonal.svg" class="w-5 h-5 mr-2 invert" alt="Files"> File Search</a></li>
+        <li><a href="#Settings-section" class="block py-2 px-4 rounded hover:bg-primary-strong flex items-center" > <img src="src/svg/refresh-circle.svg" class="w-5 h-5 mr-2 invert" alt="Settings"> Settings</a></li>
       </ul>
     </nav>
-    <div class="mt-10 text-xs text-blue-200">&copy; 2025 Homelab</div>
+    <div class="mt-10 text-xs text-muted">&copy; WolfLab</div>
   </aside>
   <!-- Main Content -->
   <main class="flex-1 flex flex-col">
@@ -30,24 +30,24 @@
     <header class="bg-white shadow flex items-center justify-between px-8 py-4">
       <div class="flex items-center gap-4">
         <img src="src/svg/wolf-solid.svg" alt="Wolf" class="w-8 h-8">
-        <h1 class="text-2xl font-bold text-blue-900">Dashboard</h1>
+        <h1 class="text-2xl font-bold text-primary">Dashboard</h1>
       </div>
       <div class="flex items-center gap-4">
-        <span class="text-gray-600">admin</span>
-        <img src="src/svg/wolf-solid.svg" alt="avatar" class="w-8 h-8 rounded-full bg-blue-200 p-1">
+        <span class="text-muted">admin</span>
+        <img src="src/svg/wolf-solid.svg" alt="avatar" class="w-8 h-8 rounded-full bg-accent-light p-1">
       </div>
     </header>
     <!-- Cards -->
     <section class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 w-full max-w-full" id="Dashboard-section">
       <!-- System Info -->
       <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full">
-        <h2 class="text-lg font-semibold text-sky-700 mb-3">System Info</h2>
-        <div id="system-info" class="text-sm text-slate-700 w-full"></div>
+        <h2 class="text-lg font-semibold text-primary mb-3">System Info</h2>
+        <div id="system-info" class="text-sm text-muted w-full"></div>
       </div>
 
       <!-- CPU Usage (bigger chart + spacing) -->
       <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full cpu-card">
-        <h2 class="text-lg font-semibold text-sky-700 mb-4">CPU Usage</h2>
+        <h2 class="text-lg font-semibold text-primary mb-4">CPU Usage</h2>
         <div class="mb-4"></div>
         <div class="chart-wrap w-full">
           <canvas id="cpuchart" class="w-full h-72"></canvas>
@@ -56,8 +56,8 @@
 
       <!-- File Search -->
       <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full">
-        <h2 class="text-lg font-semibold text-sky-700 mb-3">File Search</h2>
-        <div class="border border-dashed border-gray-200 rounded p-4 text-gray-400 text-center w-full">
+        <h2 class="text-lg font-semibold text-primary mb-3">File Search</h2>
+        <div class="border border-dashed border-muted-light rounded p-4 text-muted text-center w-full">
           File search coming soon
         </div>
       </div>
@@ -66,21 +66,24 @@
         <h1>file search section</h1>
     </section>
     <section id="Settings-section">
-    <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full">
-           <h2 class="text-lg font-semibold text-sky-700 mb-3 text-center">Settings</h2>
-            <div class="text-sm text-slate-600 text-center">
-                <h2>Server resources refresh rate (seconds):</h2><input class="input" placeholder="2">
-            </div>
+    <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full text-lg">
+           <h2 class="text-xl font-semibold text-primary mb-3 text-center">Settings</h2>
+            <div class="text-lg text-muted text-center">
+                <label for="refresh-rate" class="mr-2">Server resources refresh rate (seconds):</label><input id="refresh-rate" class="input inline-block w-16" >
+                <br>
+                <button id="save-settings" class="btn btn-brand mt-4">Save Settings</button>
       </div>
     </section>
     <!--
       Example widget 
       <div class="w-full flex-1 bg-white rounded-xl shadow-md p-6 max-w-full">
-        <h2 class="text-lg font-semibold text-sky-700 mb-3">Example Widget</h2>
-        <div class="text-sm text-slate-600">This is an example widget. Replace contents with your component or content.</div>
+        <h2 class="text-lg font-semibold text-primary mb-3">Example Widget</h2>
+        <div class="text-sm text-muted">This is an example widget. Replace contents with your component or content.</div>
       </div>
     -->
   </main>
+  <div class="bg-primary text-primary" id="toast"></div>
+
   <script src="main.js"></script>
 </body>
 </html>

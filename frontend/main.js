@@ -1,5 +1,24 @@
 let cpuChart;
 let cpuCoreCount = 0;
+let refreshRate = localStorage.getItem('refreshRate') || 2;
+let refreshIntervalId = null;
+
+function startAutoRefresh() {
+  if (refreshIntervalId) clearInterval(refreshIntervalId);
+  const ms = Number(refreshRate) * 1000;
+  refreshIntervalId = setInterval(loadSystemInfo, ms);
+}
+
+function getRefreshRate() {
+  return Number(refreshRate) * 1000;
+}
+
+function setRefreshRate(ms) {
+  const s = Number(ms) / 1000;
+  refreshRate = Number(s) || 2;
+  localStorage.setItem('refreshRate', refreshRate);
+  startAutoRefresh();
+}
 
 function iconImg(name, classes = '') {
   return `<img src="src/svg/${name}.svg" class="${classes}" alt="${name}">`;
@@ -77,8 +96,8 @@ function loadSystemInfo() {
     displayCpu = Number(displayCpu).toFixed(1);
 
     let html = `<div class='flex flex-col gap-4'>`;
-    html += `<div class='flex items-center gap-2'><span class='inline-block w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center'>${iconImg('refresh-circle','h-4 w-4')}</span><span class='font-semibold'>CPU:</span> <span>${cpu} (${cores} cores)</span></div>`;
-    html += `<div class='flex items-center gap-2'><span class='inline-block w-6 h-6 bg-green-200 rounded-full flex items-center justify-center'>${iconImg('paste-clipboard','h-4 w-4')}</span><span class='font-semibold'>RAM:</span> <span>${ram_used}/${ram_total}</span></div>`;
+    html += `<div class='flex items-center gap-2'><span class='inline-block w-6 h-6 bg-accent-light rounded-full flex items-center justify-center'>${iconImg('refresh-circle','h-4 w-4')}</span><span class='font-semibold'>CPU:</span> <span>${cpu} (${cores} cores)</span></div>`;
+    html += `<div class='flex items-center gap-2'><span class='inline-block w-6 h-6 bg-accent-light rounded-full flex items-center justify-center'>${iconImg('paste-clipboard','h-4 w-4')}</span><span class='font-semibold'>RAM:</span> <span>${ram_used}/${ram_total}</span></div>`;
     html += `<div class='flex flex-col gap-1'><span class='font-semibold'>Disk:</span><ul class='ml-4 text-sm'>`;
     disk.forEach(function(d) {
       html += `<li class='flex gap-2 items-center'>${iconImg('upload','w-4 h-4 mr-2 inline-block align-middle')} ${d.fs}: <span class='text-gray-700'>${d.used} / ${d.size}</span></li>`;
@@ -88,7 +107,7 @@ function loadSystemInfo() {
     if (cpuCores.length > 0) {
       html += `<div class='flex flex-col gap-1'><span class='font-semibold'>Per-Core Usage:</span><ul id="per-core-usage-size" class='ml-4 text-xs flex flex-wrap gap-1 max-h-16 overflow-y-auto w-56'>`;
       cpuCores.forEach(function(core, idx) {
-        html += `<li class='bg-blue-100 text-blue-800 rounded px-1 py-0.5 whitespace-nowrap'>C${idx+1}: ${core}%</li>`;
+        html += `<li class='bg-accent-lighter text-accent rounded px-1 py-0.5 whitespace-nowrap'>C${idx+1}: ${core}%</li>`;
       });
       html += '</ul></div>';
     }
@@ -146,8 +165,61 @@ function showSection(sectionId) {
         return;
     }
 }
+// Hash-based navigation handler
+function handleHashChange() {
+  let hash = window.location.hash ? window.location.hash.substring(1) : '';
+  if (!hash) hash = 'Dashboard-section';
+  // support friendly hashes as well
+  if (hash === 'dashboard') hash = 'Dashboard-section';
+  if (hash === 'files' || hash === 'file-search' || hash === 'file_search') hash = 'File-Search-section';
+  if (hash === 'settings') hash = 'Settings-section';
+  // call existing showSection to toggle visibility
+  showSection(hash);
+}
+
+window.addEventListener('hashchange', handleHashChange);
+function settingsloader(){
+    $('#refresh-rate').val(refreshRate);
+}
+function saveSettings(){ 
+    const val = $('#refresh-rate').val();
+    let newRate = Number(val);
+    if (val === '' || isNaN(newRate) || newRate <= 0) {
+      newRate = 2;
+    }
+    localStorage.setItem('refreshRate', newRate);
+    refreshRate = newRate;
+    // restart auto-refresh with new rate
+    try { startAutoRefresh(); } catch (e) { /* ignore if startAutoRefresh not available */ }
+}
+function notify(message, duration = 3000, type = 'info') {
+    const $toast = $('#toast');
+    const icon = "<img src='src/svg/" + (type === 'info' ? 'bell' : 'message-alert') + ".svg' class='inline-block w-5 h-5 mr-2 align-middle' alt='" + type + "'>";
+    if (type === 'info') {
+      $toast.removeClass().addClass('bg-primary text-white');
+    } else if (type === 'error') {
+      $toast.removeClass().addClass('text-white bg-red-600');
+    }
+    $toast.html(icon + message).fadeIn(400);
+    setTimeout(() => {
+      $toast.fadeOut(400);
+    }, duration);
+}
 $(document).ready(function() {
-  initCpuChart(1); // Start with 1 core, will auto-adjust
+  settingsloader();
+  initCpuChart(1); //1 core for the start 
   loadSystemInfo();
-  setInterval(loadSystemInfo, 2000); //2 srec refresh rate 
+  // start automatic refresh using configured refreshRateMs
+  startAutoRefresh();
+  handleHashChange();
+  const $rr = $('#refresh-rate');
+  if ($rr.length) {
+    $rr.val(getRefreshRate() / 1000);
+  }
+  window.saveSettings = function() {
+    const raw = Number($('#refresh-rate').val());
+    const secs = (Number.isFinite(raw) && raw > 0) ? raw : (getRefreshRate() / 1000);
+    setRefreshRate(secs * 1000);
+    $('#refresh-rate').val(getRefreshRate() / 1000);
+  };
 });
